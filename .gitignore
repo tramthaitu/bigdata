@@ -13,4 +13,5 @@ wheels/
 khoi_dev/
 .env
 
+uv.lock
 .DS_Store

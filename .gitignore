@@ -11,3 +11,6 @@ wheels/
 
 # khoidev
 khoi_dev/
+.env
+
+.DS_Store

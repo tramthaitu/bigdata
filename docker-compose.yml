@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  cassandra:
+    image: cassandra:latest
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    volumes:
+      - ${CASSANDRA_DATA_PATH}:/var/lib/cassandra
+    networks:
+      - cassandra-network
+
+networks:
+  cassandra-network:
+    driver: bridge

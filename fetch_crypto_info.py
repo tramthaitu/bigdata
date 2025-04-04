@@ -1,30 +1,11 @@
-import os
-import requests
-import pandas as pd
-from dotenv import load_dotenv
+import requests, pandas
+from config import CMC_API_KEY, CRYPTO_SYMBOLS_LIST
 
-def main():
-    # Load biến môi trường từ file .env
-    load_dotenv()
-    
-    # Lấy API key từ biến môi trường
-    API_KEY = os.getenv("API_KEY")
-    
-    # Kiểm tra xem API_KEY có tồn tại không
-    if not API_KEY:
-        raise ValueError("API_KEY không được tìm thấy trong biến môi trường. Vui lòng kiểm tra file .env")
-    
-    # Đọc danh sách symbols từ file
-    with open("crypto_symbols.txt", "r") as f:
-        symbols = f.read().strip()
-    
-    # Giới hạn số lượng symbols (CoinMarketCap giới hạn 200 symbols mỗi lần gọi API)
-    symbols_list = symbols.split(",")
-    symbols = ",".join(symbols_list[:200])
-    
+def crawl_coin_info():
+
     url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
-    params = {"symbol": symbols, "convert": "USD"}
-    headers = {"Accepts": "application/json", "X-CMC_PRO_API_KEY": API_KEY}
+    params = {"symbol": CRYPTO_SYMBOLS_LIST, "convert": "USD"}
+    headers = {"Accepts": "application/json", "X-CMC_PRO_API_KEY": CMC_API_KEY}
     
     response = requests.get(url, headers=headers, params=params)
     
@@ -66,7 +47,7 @@ def main():
             crypto_data.append(coin_data)
         
         # Tạo DataFrame từ dữ liệu
-        df = pd.DataFrame(crypto_data)
+        df = pandas.DataFrame(crypto_data)
         
         # Sắp xếp theo thứ hạng CMC
         df = df.sort_values('cmc_rank')
@@ -83,6 +64,3 @@ def main():
     else:
         print(f"Error: {response.status_code} - {response.text}")
         return None
-
-if __name__ == "__main__":
-    df = main()

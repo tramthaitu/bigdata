@@ -15,3 +15,6 @@ khoi_dev/
 
 uv.lock
 .DS_Store
+
+# Ignore Cassandra data folder
+cassandra_data/

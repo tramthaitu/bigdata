@@ -6,7 +6,7 @@ load_dotenv()
 CMC_API_KEY = os.getenv("CMC_API_KEY")
 
 # Đọc danh sách symbols từ file một lần
-with open("crypto_symbols.txt", "r") as f:
+with open("src/crypto/crypto_symbols_id.txt", "r") as f:
     CRYPTO_SYMBOLS = f.read().strip()
 
 # Chuyển thành list cho dễ sử dụng

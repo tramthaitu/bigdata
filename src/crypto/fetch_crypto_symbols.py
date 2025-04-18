@@ -1,28 +1,21 @@
-import os
 import requests
-from dotenv import load_dotenv
+from src.utils.config import CMC_API_KEY
 
 
-def main():
-    load_dotenv() # Load biến môi trường từ file .env
-    API_KEY = os.getenv("API_KEY") # Lấy API key từ biến môi trường
-    
-
+def main():    
     url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
     params = {"start": 1, "limit": 200, "convert": "USD", "sort": "market_cap", "sort_dir": "desc"}
-    headers = {"Accepts": "application/json", "X-CMC_PRO_API_KEY": API_KEY}
+    headers = {"Accepts": "application/json", "X-CMC_PRO_API_KEY": CMC_API_KEY}
     
     response = requests.get(url, headers=headers, params=params)
     if response.status_code == 200:
-        symbols = [coin["symbol"] for coin in response.json()["data"]]
-        print("Symbols:", ", ".join(symbols))
+        symbols = [str(coin["id"]) for coin in response.json()["data"]]
         
         # Lưu symbols vào file
-        with open("crypto_symbols.txt", "w") as f:
+        with open("src/crypto/crypto_symbols_id.txt", "w") as f:
             f.write(",".join(symbols))
     else:
         print(f"Error: {response.status_code} - {response.text}")
-
 
 
 if __name__ == "__main__":

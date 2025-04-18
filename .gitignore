@@ -1,20 +1,39 @@
-# Python-generated files
+# Byte-compiled / cache
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.so
+
+# Distribution / packaging
 build/
 dist/
+*.egg-info/
 wheels/
-*.egg-info
 
-# Virtual environments
-.venv
-
-# khoidev
-khoi_dev/
-.env
-
-uv.lock
+# macOS
 .DS_Store
 
-# Ignore Cassandra data folder
-cassandra_data/
+# Virtual environments
+.venv/
+env/
+ENV/
+
+# Database / data
+data/
+
+# Airflow
+logs/
+plugins/
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Local dev folders
+khoi_dev/
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Environment variable files
+.env

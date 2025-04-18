@@ -1,0 +1,32 @@
+# Python cache files
+__pycache__
+*.pyc
+*.pyo
+
+# Thư mục môi trường ảo
+venv/
+.venv/
+
+# File log và temp
+*.log
+*.tmp
+*.swp
+
+# Thư mục và file không cần thiết khác
+.dockerignore
+.git
+*.git*
+*.bak
+*.tgz
+*.zip
+*.tar
+*.gz
+
+# Các file không cần thiết trong thư mục gốc
+README.md
+
+# File notebook hoặc tài liệu thử nghiệm
+khoi_dev/
+
+# File hệ thống của OS
+.DS_Store

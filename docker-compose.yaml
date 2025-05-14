@@ -1,220 +1,109 @@
-version: "3.8"
-
 services:
-  mongodb:
-    image: mongodb/mongodb-community-server:5.0.2-ubuntu2004
-    container_name: mongodb
-    ports:
-      - 27017:27017
-    environment:
-      - MONGODB_INITDB_ROOT_USERNAME=mongodb
-      - MONGODB_INITDB_ROOT_PASSWORD=mongodb
-    volumes:
-      - ./data/mongodb:/data/db
-    healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-
-  redis:
-    image: redis:latest
-    container_name: redis
-    ports:
-      - 6379:6379
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-
   postgres:
-    image: postgres:13
+    image: postgres:11
     container_name: postgres
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
-    volumes:
-      - ./data/postgres_data:/var/lib/postgresql/data
+      POSTGRES_USER: 'postgres_user'
+      POSTGRES_PASSWORD: 'postgres_password'
+      POSTGRES_DB: 'postgres_db'
+    networks:
+      - docker_example_network
+    expose:
+      - '5432'
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres_user -d postgres_db']
+      interval: 10s
+      timeout: 8s
+      retries: 5
+  user-code:
+    build:
+      context: ./dagster-pipeline
+      dockerfile: Dockerfile
+    container_name: user-code
+    image: user-code_image
+    restart: always
+    environment:
+      DAGSTER_HOME: '/opt/dagster/dagster_home'
+      DAGSTER_POSTGRES_USER: 'postgres_user'
+      DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
+      DAGSTER_POSTGRES_DB: 'postgres_db'
+      DAGSTER_POSTGRES_HOST: 'postgres'
+      DAGSTER_POSTGRES_PORT: '5432'
+    volumes:
+      - ./dagster-instance/dagster_home:/opt/dagster/dagster_home:ro
+    expose:
+      - '4000'
+    healthcheck:
+      test: ["CMD", "bash", "-c", "timeout 1 bash -c '</dev/tcp/localhost/4000'"]
       interval: 5s
-      retries: 5
-    restart: always
-
-  airflow-webserver:
+      timeout: 3s
+      retries: 10
+    networks:
+      - docker_example_network
+  dagster-webserver:
     build:
-      context: .
+      context: ./dagster-instance
       dockerfile: Dockerfile
-    container_name: airflow-webserver
-    environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-      AIRFLOW__CORE__FERNET_KEY: ''
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
-      AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
-    user: "50000:50000"
-    depends_on:
-      redis:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    command: webserver
+    entrypoint:
+      - dagster-webserver
+      - -h
+      - '0.0.0.0'
+      - -p
+      - '3000'
+      - -w
+      - /opt/dagster/dagster_home/workspace.yaml
+    container_name: dagster-webserver
+    expose:
+      - '3000'
     ports:
-      - 8080:8080
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-
-  airflow-scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: airflow-scheduler
+      - '3000:3000'
     environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-      AIRFLOW__CORE__FERNET_KEY: ''
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
-      AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
-    user: "50000:50000"
+      DAGSTER_POSTGRES_USER: 'postgres_user'
+      DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
+      DAGSTER_POSTGRES_DB: 'postgres_db'
+      DAGSTER_HOME: '/opt/dagster/dagster_home'
+      DAGSTER_POSTGRES_HOST: 'postgres'
+      DAGSTER_POSTGRES_PORT: '5432'
+    volumes: # Make docker client accessible so we can terminate containers from the webserver
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/io_manager_storage:/tmp/io_manager_storage
+    networks:
+      - docker_example_network
     depends_on:
-      redis:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
       postgres:
         condition: service_healthy
-    command: scheduler
-    healthcheck:
-      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-
-  airflow-worker:
+      user-code:
+        condition: service_healthy
+  dagster-daemon:
     build:
-      context: .
+      context: dagster-instance
       dockerfile: Dockerfile
-    container_name: airflow-worker
+    entrypoint:
+      - dagster-daemon
+      - run
+      - -w
+      - /opt/dagster/dagster_home/workspace.yaml
+    container_name: dagster-daemon
+    restart: on-failure
     environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-      AIRFLOW__CORE__FERNET_KEY: ''
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
-      AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
-    user: "50000:50000"
+      DAGSTER_POSTGRES_USER: 'postgres_user'
+      DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
+      DAGSTER_POSTGRES_DB: 'postgres_db'
+      DAGSTER_HOME: '/opt/dagster/dagster_home'
+      DAGSTER_POSTGRES_HOST: 'postgres'
+      DAGSTER_POSTGRES_PORT: '5432'
+    volumes: # Make docker client accessible so we can launch containers using host docker
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/io_manager_storage:/tmp/io_manager_storage
+    networks:
+      - docker_example_network
     depends_on:
-      redis:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
       postgres:
         condition: service_healthy
-    command: celery worker
-    healthcheck:
-      test:
-        - "CMD-SHELL"
-        - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
+      user-code:
+        condition: service_healthy
 
-  airflow-init:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: airflow-init
-    environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-      AIRFLOW__CORE__FERNET_KEY: ''
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
-      AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
-      _AIRFLOW_DB_UPGRADE: 'true'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: 'airflow'
-      _AIRFLOW_WWW_USER_PASSWORD: 'airflow'
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
-    user: "50000:50000"
-    depends_on:
-      redis:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    command: version
-
-  flower:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: airflow-flower
-    environment:
-      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-      AIRFLOW__CORE__FERNET_KEY: ''
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
-      AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
-    user: "50000:50000"
-    depends_on:
-      redis:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    command: celery flower
-    ports:
-      - 5555:5555
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
+networks:
+  docker_example_network:
+    driver: bridge
+    name: docker_example_network

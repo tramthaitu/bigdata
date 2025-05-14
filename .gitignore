@@ -17,19 +17,11 @@ wheels/
 env/
 ENV/
 
-# Database / data
-data/
-
-# Airflow
-logs/
-plugins/
 
 # IDE / Editor
 .vscode/
 .idea/
 
-# Local dev folders
-khoi_dev/
 
 # Docker
 *.log

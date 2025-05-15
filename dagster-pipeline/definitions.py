@@ -1,16 +1,19 @@
-from dagster import op, job
+from dagster import Definitions
+from resources import mongodb_resource
+from assets import mongo_collection_asset
 
-@op
-def get_name():
-    """Simple op that returns a string."""
-    return "Dagster"
-
-@op
-def greet(name: str):
-    """Op that prints a greeting."""
-    print(f"👋 Hello, {name}!")
-
-@job
-def hello_dagster_job():
-    """A minimal job wiring get_name -> greet."""
-    greet(get_name())
+defs = Definitions(
+    assets=[mongo_collection_asset],
+    resources={
+        "mongodb": mongodb_resource.configured(
+            {
+                "host": "mongodb",
+                "port": 27017,
+                "username": "mongo_user",
+                "password": "mongo_password",
+                "database": "testdb",
+                "collection_name": "users"
+            }
+        )
+    }
+)

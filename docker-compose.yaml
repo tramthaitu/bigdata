@@ -15,6 +15,24 @@ services:
       interval: 10s
       timeout: 8s
       retries: 5
+  mongodb:
+    image: mongodb/mongodb-community-server:5.0.2-ubuntu2004
+    container_name: mongodb
+    ports:
+      - 27017:27017
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=mongo_user
+      - MONGODB_INITDB_ROOT_PASSWORD=mongo_password
+    volumes:
+      - ./data/mongodb:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+    networks:
+      - docker_example_network
   user-code:
     build:
       context: ./dagster-pipeline
@@ -29,8 +47,6 @@ services:
       DAGSTER_POSTGRES_DB: 'postgres_db'
       DAGSTER_POSTGRES_HOST: 'postgres'
       DAGSTER_POSTGRES_PORT: '5432'
-    volumes:
-      - ./dagster-instance/dagster_home:/opt/dagster/dagster_home:ro
     expose:
       - '4000'
     healthcheck:
@@ -72,8 +88,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      user-code:
-        condition: service_healthy
   dagster-daemon:
     build:
       context: dagster-instance
@@ -81,8 +95,6 @@ services:
     entrypoint:
       - dagster-daemon
       - run
-      - -w
-      - /opt/dagster/dagster_home/workspace.yaml
     container_name: dagster-daemon
     restart: on-failure
     environment:
@@ -99,8 +111,6 @@ services:
       - docker_example_network
     depends_on:
       postgres:
-        condition: service_healthy
-      user-code:
         condition: service_healthy
 
 networks:

@@ -3,7 +3,8 @@ FROM python:3.10-slim
 RUN pip install \
     dagster \
     dagster-postgres \
-    dagster-docker
+    dagster-docker \
+    pymongo
 
 # Add code location code
 WORKDIR /opt/dagster/app

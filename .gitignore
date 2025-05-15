@@ -29,3 +29,6 @@ docker-compose.override.yml
 
 # Environment variable files
 .env
+
+# Data
+data/

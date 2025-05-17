@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: 'postgres_password'
       POSTGRES_DB: 'postgres_db'
     networks:
-      - docker_example_network
+      - book-review
     expose:
       - '5432'
     healthcheck:
@@ -32,7 +32,7 @@ services:
       retries: 5
     restart: always
     networks:
-      - docker_example_network
+      - book-review
   user-code:
     build:
       context: ./dagster-pipeline
@@ -41,7 +41,6 @@ services:
     image: user-code_image
     restart: always
     environment:
-      DAGSTER_HOME: '/opt/dagster/dagster_home'
       DAGSTER_POSTGRES_USER: 'postgres_user'
       DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
       DAGSTER_POSTGRES_DB: 'postgres_db'
@@ -55,7 +54,7 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      - docker_example_network
+      - book-review
   dagster-webserver:
     build:
       context: ./dagster-instance
@@ -77,14 +76,13 @@ services:
       DAGSTER_POSTGRES_USER: 'postgres_user'
       DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
       DAGSTER_POSTGRES_DB: 'postgres_db'
-      DAGSTER_HOME: '/opt/dagster/dagster_home'
       DAGSTER_POSTGRES_HOST: 'postgres'
       DAGSTER_POSTGRES_PORT: '5432'
     volumes: # Make docker client accessible so we can terminate containers from the webserver
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
-      - docker_example_network
+      - book-review
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,19 +99,59 @@ services:
       DAGSTER_POSTGRES_USER: 'postgres_user'
       DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
       DAGSTER_POSTGRES_DB: 'postgres_db'
-      DAGSTER_HOME: '/opt/dagster/dagster_home'
       DAGSTER_POSTGRES_HOST: 'postgres'
       DAGSTER_POSTGRES_PORT: '5432'
     volumes: # Make docker client accessible so we can launch containers using host docker
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
-      - docker_example_network
+      - book-review
     depends_on:
       postgres:
         condition: service_healthy
+  spark-master:
+    hostname: spark-master
+    container_name: spark-master
+    image: bitnami/spark:3.5.4
+    environment:
+      SPARK_MODE: master     
+    ports:
+      - 4040:4040
+      - 8080:8080
+      - 7077:7077      
+    networks:
+      - book-review
+  spark-worker-1:
+    hostname: spark-worker-1
+    container_name: spark-worker-1
+    image: bitnami/spark:3.5.4
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077 
+    ports:
+      - 8081:8081
+    networks:
+      - book-review
 
+  spark-worker-2:
+    hostname: spark-worker-2
+    container_name: spark-worker-2
+    image: bitnami/spark:3.5.4
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+    ports:
+      - 8082:8081
+    networks:
+      - book-review
+
+volumes:
+  spark-logs:
 networks:
-  docker_example_network:
+  book-review:
     driver: bridge
-    name: docker_example_network
+    name: book-review

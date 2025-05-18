@@ -1,16 +1,17 @@
 from dagster import Definitions, load_assets_from_modules
-from assets import add_initial_data, train_model
+from assets import add_initial_data, als_model, cb_model
 from resources import mongodb_resource, spark_resource
-from jobs import train_model_job
-from schedules import train_model_schedule
+from jobs import train_als_model_job, train_cb_model_job
+from schedules import train_als_model_schedule, train_cb_model_schedule
 
 add_initial_data_assets = load_assets_from_modules([add_initial_data], group_name="initial_data_group")
-train_model_assets = load_assets_from_modules([train_model], group_name="train_model_group")
+als_model_assets = load_assets_from_modules([als_model], group_name="als_model_group")
+cb_model_assets = load_assets_from_modules([cb_model], group_name="cb_model_group")
 
 defs = Definitions(
-    assets=[*add_initial_data_assets, *train_model_assets],
-    jobs=[train_model_job],
-    schedules=[train_model_schedule],
+    assets=[*add_initial_data_assets, *als_model_assets, *cb_model_assets],
+    jobs=[train_als_model_job, train_cb_model_job],
+    schedules=[train_als_model_schedule, train_cb_model_schedule],
     resources={
         "mongodb": mongodb_resource.configured(
             {

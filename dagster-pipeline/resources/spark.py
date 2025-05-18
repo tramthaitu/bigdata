@@ -20,7 +20,7 @@ def spark_resource(context: InitResourceContext):
     spark_session = SparkSession.builder \
         .appName(cfg["spark-app-name"]) \
         .master(f"spark://{cfg['spark-master-host']}:{cfg['spark-master-port']}") \
-        .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:10.5.0") \
+        .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:10.5.0,org.postgresql:postgresql:42.5.0") \
         .config("spark.mongodb.read.connection.uri", f"mongodb://{cfg['mongodb-username']}:{cfg['mongodb-password']}@{cfg['mongodb-host']}:{cfg['mongodb-port']}/") \
         .config("spark.mongodb.write.connection.uri", f"mongodb://{cfg['mongodb-username']}:{cfg['mongodb-password']}@{cfg['mongodb-host']}:{cfg['mongodb-port']}/") \
         .getOrCreate()

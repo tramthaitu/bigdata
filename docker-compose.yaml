@@ -7,7 +7,9 @@ services:
       POSTGRES_PASSWORD: 'postgres_password'
       POSTGRES_DB: 'postgres_db'
     networks:
-      - book-review
+      - book-review-net
+    volumes:
+      - ./data/postgresql:/var/lib/postgresql/data
     expose:
       - '5432'
     healthcheck:
@@ -32,7 +34,7 @@ services:
       retries: 5
     restart: always
     networks:
-      - book-review
+      - book-review-net
   user-code:
     build:
       context: ./dagster-pipeline
@@ -46,6 +48,8 @@ services:
       DAGSTER_POSTGRES_DB: 'postgres_db'
       DAGSTER_POSTGRES_HOST: 'postgres'
       DAGSTER_POSTGRES_PORT: '5432'
+    volumes:
+      - ./dagster-pipeline/initial_books_data:/opt/dagster/app/initial_books_data
     expose:
       - '4000'
     healthcheck:
@@ -53,8 +57,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
     networks:
-      - book-review
+      - book-review-net
   dagster-webserver:
     build:
       context: ./dagster-instance
@@ -82,7 +91,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
-      - book-review
+      - book-review-net
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,7 +114,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
-      - book-review
+      - book-review-net
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,38 +129,50 @@ services:
       - 8080:8080
       - 7077:7077      
     networks:
-      - book-review
+      - book-review-net
+    depends_on:
+      - mongodb
   spark-worker-1:
     hostname: spark-worker-1
     container_name: spark-worker-1
     image: bitnami/spark:3.5.4
     depends_on:
       - spark-master
+      - mongodb
     environment:
       SPARK_MODE: worker
       SPARK_MASTER_URL: spark://spark-master:7077 
     ports:
       - 8081:8081
     networks:
-      - book-review
-
+      - book-review-net
   spark-worker-2:
     hostname: spark-worker-2
     container_name: spark-worker-2
     image: bitnami/spark:3.5.4
     depends_on:
       - spark-master
+      - mongodb
     environment:
       SPARK_MODE: worker
       SPARK_MASTER_URL: spark://spark-master:7077
     ports:
       - 8082:8081
     networks:
-      - book-review
-
+      - book-review-net
+  app:
+    build:
+      context: ./streamlit
+      dockerfile: Dockerfile
+    image: app-image
+    container_name: book-review-app
+    ports:
+      - 8501:8501
+    networks:
+      - book-review-net
 volumes:
   spark-logs:
 networks:
-  book-review:
+  book-review-net:
     driver: bridge
-    name: book-review
+    name: book-review-net

@@ -1,20 +1,19 @@
 from dagster import asset, AssetExecutionContext
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col
-from pyspark.sql.types import StringType
 from pyspark.sql import functions as F
 from pyspark.ml.feature import StringIndexer
 from pyspark.sql.types import IntegerType
 from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml.recommendation import ALS
-from pyspark.sql.functions import explode, col
+from pyspark.sql.functions import explode, col, udf, regexp_replace
+from pyspark.sql.types import StringType
 
 
 @asset(
     required_resource_keys={"spark", "mongodb"},
     deps=["add_initial_books_details", "add_initial_books_reviews"]
 )
-def spark_data_asset(context: AssetExecutionContext) -> None:
+def cf_model(context: AssetExecutionContext) -> None:
     """
     1. Read back the data from MongoDB
     2. Create a Spark DataFrame and perform simple transformations
@@ -22,26 +21,30 @@ def spark_data_asset(context: AssetExecutionContext) -> None:
     """
     spark: SparkSession = context.resources.spark
 
-    df_rating = spark.read \
-        .format("mongodb") \
-        .option("spark.mongodb.database", "books_db") \
-        .option("spark.mongodb.collection", "books_reviews") \
-        .load()
-    context.log.info("1"*10)
-    # Lấy ra 4 cột: user_id, profileName, Title, Review/score
-        
-    df_book = spark.read \
-        .format("mongodb") \
-        .option("spark.mongodb.database", "books_db") \
-        .option("spark.mongodb.collection", "books_details") \
-        .load()
-    
-    context.log.info("2"*10)
-    # Book: book_id, title, categories, authors, publisher, image, description 
+    df_rating = (
+        spark.read.format("mongodb")
+            .option("spark.mongodb.database", "books_db")
+            .option("spark.mongodb.collection", "books_reviews")
+            .load()
+            .select("Title","User_id","profileName","review/score")
+            .filter(F.col("User_id").isNotNull())
+            .cache()            # ← cache ngay sau load
+    )
+    df_book = (
+        spark.read.format("mongodb")
+            .option("spark.mongodb.database", "books_db")
+            .option("spark.mongodb.collection", "books_details")
+            .load()
+            .select("book_id","Title","categories","authors",
+                    "publisher","image","description")
+            .cache()
+    )
 
-    context.log.info("1"*10)
-    df_rating = df_rating.filter(df_rating.User_id.isNotNull())
+    df_book = df_book.withColumn("categories", regexp_replace(col("categories"), "[\\[\\]'\"']", ""))
 
+    df_book = df_book.withColumn("authors", regexp_replace(col("authors"), r"[\[\]\"']", ""))
+
+    context.log.info("loaded data from mongodb")
 
     # Định nghĩa hàm clean_profile_name
     def clean_profile_name(profile):
@@ -55,7 +58,7 @@ def spark_data_asset(context: AssetExecutionContext) -> None:
             else:
                 return parts[1].strip()  # Nếu không, giữ lại phần giữa hai dấu "
         return profile.strip()  # Nếu không có dấu ", giữ nguyên chuỗi
-
+    
     # Đăng ký UDF
     clean_profile_udf = udf(clean_profile_name, StringType())
 
@@ -67,16 +70,14 @@ def spark_data_asset(context: AssetExecutionContext) -> None:
                  .select("User_id", "`review/score`", "book_id")
     
 
-    # Đếm số lượng book_id duy nhất mà mỗi User_id đã review
-    user_review_counts = df_cf.groupBy("User_id").agg(F.countDistinct("book_id").alias("review_count"))
+    # Đếm tổng số lượt review (số dòng) theo mỗi User_id
+    user_review_counts = df_cf.groupBy("User_id").agg(F.count("*").alias("review_count"))
 
-    # Lọc các user có số review > 1
+    # Lọc user có số review > 2
     users_with_multiple_reviews = user_review_counts.filter(user_review_counts.review_count > 2)
 
-    # Kết nối lại với DataFrame gốc để lọc bỏ các dòng có User_id chỉ review 1 lần
+    # Giữ lại các dòng của df_cf chỉ chứa những user đủ điều kiện
     df_cf = df_cf.join(users_with_multiple_reviews, on="User_id", how="inner")
-    
-
     
 
     # Ánh xạ User_id và book_id thành số nguyên
@@ -96,7 +97,8 @@ def spark_data_asset(context: AssetExecutionContext) -> None:
     train_data = train_data.drop("User_id", "book_id")
     test_data = test_data.drop("User_id", "book_id")
 
-    context.log.info("2"*10)
+    context.log.info("train and test data prepared")
+    
     als = ALS(
         rank = 10,
         maxIter=10,          # Số lần lặp
@@ -120,8 +122,10 @@ def spark_data_asset(context: AssetExecutionContext) -> None:
     )
 
     rmse = evaluator.evaluate(predictions)
+
+
     # Xíu ghi log
-    context.log.info("3"*10)
+    context.log.info("train model completed with")
 
     def get_user_recommendations(model, df_cf, num_items=10):
         # Lấy khuyến nghị từ mô hình
@@ -145,19 +149,23 @@ def spark_data_asset(context: AssetExecutionContext) -> None:
     recommend_df = get_user_recommendations(model, df_cf, num_items=10) \
         .orderBy(["User_id", "rating"], ascending=[True, False])  # rating giảm dần, User_id tăng dần
 
-    context.log.info("4"*10)
+    context.log.info("recommend")
     
     output_cf = (recommend_df
         .join(df_rating.select("User_id", "profileName"), on="User_id", how="inner")
         .join(df_book.select("book_id", "image", "Title", "categories", "authors", "description", "publisher"),
             on="book_id", how="inner")
     )
-
-    context.log.info("5"*10)
-
+    
+    # Tự tạo bảng trong PostgreSQL
     output_cf.write \
-        .format("mongodb") \
-        .option("spark.mongodb.database", "books_db") \
-        .option("spark.mongodb.collection", "books_recommend") \
-        .mode("overwrite") \
+        .format("jdbc") \
+        .option("url", "jdbc:postgresql://postgres:5432/postgres_db") \
+        .option("driver", "org.postgresql.Driver") \
+        .option("dbtable", "public.output_cf") \
+        .option("user", "postgres_user") \
+        .option("password", "postgres_password") \
+        .mode("append") \
         .save()
+    
+    context.log.info("write")

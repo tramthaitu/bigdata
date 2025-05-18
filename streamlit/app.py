@@ -53,7 +53,7 @@ if not st.session_state.selected_book_id:
             st.session_state.user_id = matched_users['User_id'].values[0]
             st.session_state.from_user_history = True
         else:
-            st.write("Hãy bắt đầu khám phá các thể loại bạn yêu thích")
+            st.write("Xin chào người lạ. Hãy bắt đầu khám phá các thể loại bạn yêu thích")
             st.session_state.from_user_history = False
     # Lấy tất cả thể loại
     all_categories = sorted({
@@ -76,7 +76,7 @@ if not st.session_state.selected_book_id:
 
         filtered_df = df[df['categories'].apply(lambda x: match_categories(x, selected_cats))]
 
-        st.markdown(f"### 🎯 Kết quả ({len(filtered_df)} sách)")
+        st.markdown(f"### 🎯 Kết quả")
 
         shown_books = set()
         for _, row in filtered_df.iterrows():

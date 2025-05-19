@@ -41,7 +41,7 @@ cd bigdata/
 ### 5. Start the core services
 
 ```bash
-docker-compose up postgres mongodb user-code dagster-webserver dagster-daemon spark-master spark-worker-1 spark-worker-2
+docker-compose up postgres mongodb user-code dagster-webserver dagster-daemon spark-master spark-worker
 ```
 
 ### 6. Run jobs in Dagster

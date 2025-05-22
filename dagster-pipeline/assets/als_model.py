@@ -15,9 +15,9 @@ from pyspark.sql.types import StringType
 )
 def cf_model(context: AssetExecutionContext) -> None:
     """
-    1. Read back the data from MongoDB
-    2. Create a Spark DataFrame and perform simple transformations
-    3. Log/display results
+    1. Extract dữ liệu từ MongoDB
+    2. Transform dữ liệu thành DataFrame Spark và thực hiện các biến đổi đơn giản
+    3. Load dữ liệu vào PostgreSQL
     """
     spark: SparkSession = context.resources.spark
 
@@ -101,7 +101,7 @@ def cf_model(context: AssetExecutionContext) -> None:
     
     als = ALS(
         rank = 10,
-        maxIter=10,          # Số lần lặp
+        maxIter=14,          # Số lần lặp
         regParam=0.2,        # Tham số regularization
         userCol="User_id_index",    # Cột người dùng
         itemCol="book_id_index",    # Cột sách
@@ -115,14 +115,20 @@ def cf_model(context: AssetExecutionContext) -> None:
     # 5. Đánh giá mô hình trên tập test
     predictions = model.transform(test_data)
 
-    evaluator = RegressionEvaluator(
+    rmse_evaluator = RegressionEvaluator(
         metricName="rmse",
         labelCol="review/score",
         predictionCol="prediction"
     )
 
-    rmse = evaluator.evaluate(predictions)
+    mae_evaluator = RegressionEvaluator(
+        metricName="mae",
+        labelCol="review/score",
+        predictionCol="prediction"
+    )
 
+    rmse = rmse_evaluator.evaluate(predictions)
+    mae = mae_evaluator.evaluate(predictions)
 
     # Xíu ghi log
     context.log.info("train model completed with")

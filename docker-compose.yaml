@@ -10,29 +10,14 @@ services:
       - book-review-net
     volumes:
       - ./data/postgresql:/var/lib/postgresql/data
-    expose:
-      - '5432'
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres_user -d postgres_db']
-      interval: 10s
-      timeout: 8s
-      retries: 5
   mongodb:
     image: mongodb/mongodb-community-server:5.0.2-ubuntu2004
     container_name: mongodb
-    ports:
-      - 27017:27017
     environment:
       - MONGODB_INITDB_ROOT_USERNAME=mongo_user
       - MONGODB_INITDB_ROOT_PASSWORD=mongo_password
     volumes:
       - ./data/mongodb:/data/db
-    healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
     networks:
       - book-review-net
   user-code:
@@ -50,18 +35,6 @@ services:
       DAGSTER_POSTGRES_PORT: '5432'
     volumes:
       - ./dagster-pipeline/initial_books_data:/opt/dagster/app/initial_books_data
-    expose:
-      - '4000'
-    healthcheck:
-      test: ["CMD", "bash", "-c", "timeout 1 bash -c '</dev/tcp/localhost/4000'"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
     networks:
       - book-review-net
   dagster-webserver:
@@ -77,24 +50,19 @@ services:
       - -w
       - /opt/dagster/dagster_home/workspace.yaml
     container_name: dagster-webserver
-    expose:
-      - '3000'
     ports:
-      - '3000:3000'
+      - 3000:3000
     environment:
       DAGSTER_POSTGRES_USER: 'postgres_user'
       DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
       DAGSTER_POSTGRES_DB: 'postgres_db'
       DAGSTER_POSTGRES_HOST: 'postgres'
       DAGSTER_POSTGRES_PORT: '5432'
-    volumes: # Make docker client accessible so we can terminate containers from the webserver
+    volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
       - book-review-net
-    depends_on:
-      postgres:
-        condition: service_healthy
   dagster-daemon:
     build:
       context: dagster-instance
@@ -110,33 +78,23 @@ services:
       DAGSTER_POSTGRES_DB: 'postgres_db'
       DAGSTER_POSTGRES_HOST: 'postgres'
       DAGSTER_POSTGRES_PORT: '5432'
-    volumes: # Make docker client accessible so we can launch containers using host docker
+    volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
       - book-review-net
-    depends_on:
-      postgres:
-        condition: service_healthy
   spark-master:
     hostname: spark-master
     container_name: spark-master
     image: bitnami/spark:3.5.4
     environment:
       - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-      - SPARK_USER=spark 
     ports:
       - 4040:4040
       - 8080:8080
       - 7077:7077      
     networks:
       - book-review-net
-    depends_on:
-      - mongodb
   spark-worker:
       image: bitnami/spark:3.5.4
       networks:
@@ -147,14 +105,7 @@ services:
         replicas: 2
       environment:
         - SPARK_MODE=worker
-        - SPARK_MASTER_URL=spark://spark-master:7077 
-        - SPARK_WORKER_MEMORY=2G
-        - SPARK_WORKER_CORES=1
-        - SPARK_RPC_AUTHENTICATION_ENABLED=no
-        - SPARK_RPC_ENCRYPTION_ENABLED=no
-        - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-        - SPARK_SSL_ENABLED=no
-        - SPARK_USER=spark
+        - SPARK_MASTER_URL=spark://spark-master:7077
   app:
     build:
       context: ./streamlit

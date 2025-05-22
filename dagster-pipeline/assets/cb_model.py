@@ -12,9 +12,9 @@ from pyspark.ml.feature import Tokenizer
 )
 def cb_model(context: AssetExecutionContext) -> None:
     """
-    1. Read back the data from MongoDB
-    2. Create a Spark DataFrame and perform simple transformations
-    3. Log/display results
+    1. Extract dữ liệu từ MongoDB
+    2. Transform dữ liệu thành DataFrame Spark và thực hiện các biến đổi đơn giản
+    3. Load dữ liệu vào PostgreSQL
     """
     spark: SparkSession = context.resources.spark
     

@@ -25,7 +25,7 @@ def add_initial_books_details(context: AssetExecutionContext):
     Tải thông tin về những cuốn sách 
     Lưu ý: chỉ cập nhật khi nhập sách mới - thủ công hoặc dùng external trigger
     """
-
+    
     add_inittial_data_from_csv(
         connector=context.resources.mongodb,
         database="books_db",
